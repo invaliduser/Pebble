@@ -90,16 +90,19 @@
 (defn body-string [req]
   (slurp (:body req)))
 
-(def whoami
-  {:name "pebble"
-   :kind :local-shared-state
-   :description "A local shared state object for Daniel and Codex"
-   :routes ["/" "/state" "/command" "/whoami"]
-   :agent-interface {:helper "./agent"
-                     :socket {:protocol "newline-delimited EDN command maps"
-                              :host "localhost"
-                              :env-port "PEBBLE_SOCKET_PORT"
-                              :default-port 7778}}})
+(defn whoami []
+  (let [repo-location (.getCanonicalPath (io/file "."))]
+    {:name "pebble"
+     :kind :local-shared-state
+     :description "A local shared state object for Daniel and Codex"
+     :repository-location repo
+     :routes ["/" "/state" "/command" "/whoami"]
+     :agent-interface {:helper "./agent"
+                       :agents-md-location (str repo "/AGENTS.md")
+                       :socket {:protocol "newline-delimited EDN command maps"
+                                :host "localhost"
+                                :env-port "PEBBLE_SOCKET_PORT"
+                                :default-port 7778}}}))
 
 (defn-with-closed app [req]
   [get-asset #(slurp (io/file "public" %))
@@ -111,7 +114,7 @@
     "/style.css" (response 200 css "text/css; charset=utf-8")
     "/js/script.js" (response 200 js "text/javascript; charset=utf-8")
     "/command" (response 200 (pr-str (handle-line (body-string req))) "application/edn; charset=utf-8")
-    "/whoami" (response 200 (pr-str whoami) "application/edn; charset=utf-8")
+    "/whoami" (response 200 (pr-str (whoami)) "application/edn; charset=utf-8")
     "/state" (response 200
                         (pr-str @!state)
                         "application/edn; charset=utf-8"

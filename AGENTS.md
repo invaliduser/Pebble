@@ -32,8 +32,7 @@ When Daniel says to put a plan into Pebble, use an ordered vector of pairs:
 ```
 
 The first element is the step text. The second element is Daniel's comment slot.
-Do not put words in Daniel's mouth; leave comment slots as empty strings unless
-he provides the text.
+Leave comment slots as empty strings unless he provides the text.
 
 Pull the whole state before acting on a Pebble plan:
 

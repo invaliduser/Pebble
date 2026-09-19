@@ -1,0 +1,35 @@
+#!/usr/bin/env bb
+
+(comment Hello human!  This is not for you!)
+
+(ns agent
+  (:require [clojure.java.io :as io]
+            [clojure.repl :as repl :refer [doc apropos]]
+            [clojure.string :as str])
+  (:import [java.net Socket]))
+
+(defn env-int [k default]
+  (if-let [v (System/getenv k)]
+    (parse-long v)
+    default))
+
+(defn commands [args]
+  (if (seq args) args (line-seq (io/reader *in*))))
+
+(defn -main [& args]
+  (let [host (or (System/getenv "PEBBLE_SOCKET_HOST") "localhost")
+        port (env-int "PEBBLE_SOCKET_PORT" 7778)]
+    (with-open [socket (Socket. host port)
+                rdr (io/reader socket)
+                w (io/writer socket)]
+      (doseq [command (commands args)
+              :when (not (str/blank? command))]
+        (.write w command)
+        (.write w "\n")
+        (.flush w)
+        (println (.readLine rdr)))
+      (.write w "{:op :bye}\n")
+      (.flush w)
+      (.readLine rdr))))
+
+(apply -main *command-line-args*)

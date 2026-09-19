@@ -7,16 +7,45 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <pre id="state"></pre>
+  <header>
+    <h1>pebble</h1>
+    <div class="controls">
+      <button id="refresh" type="button">refresh</button>
+      <label><input id="auto-refresh" type="checkbox"> auto</label>
+    </div>
+  </header>
 
-  <script>
-    const state = document.querySelector("#state");
+  <main>
+    <div id="tree" class="tree"></div>
 
-    async function render() {
-      state.textContent = await fetch("/state").then(r => r.text());
-    }
+    <section class="editor">
+      <div class="editor-head">
+        <div>
+          <div class="label">selected</div>
+          <code id="selected">[] value</code>
+        </div>
+        <div class="mode">
+          <label><input type="radio" name="edit-mode" value="text" checked> text</label>
+          <label><input type="radio" name="edit-mode" value="edn"> edn</label>
+        </div>
+      </div>
+      <label id="assoc-key-field" class="key-field">
+        <span class="label">assoc key</span>
+        <input id="assoc-key" spellcheck="false" placeholder=":key">
+      </label>
+      <textarea id="value-editor" spellcheck="false"></textarea>
+      <div class="editor-actions">
+        <button id="set-value" type="button">set value</button>
+      </div>
+      <pre id="edit-result"></pre>
+    </section>
 
-    render().catch(e => state.textContent = String(e));
-  </script>
+    <aside class="note">
+      <div>arrow keys</div>
+      <p>Up/down move selection. Right moves from key to value, opens, or enters. Left closes, moves from value to key, or moves to parent. Press e to edit value, k to edit its key, m to switch mode, a to edit assoc key, r for root.</p>
+    </aside>
+  </main>
+
+  <script src="/js/script.js"></script>
 </body>
 </html>

@@ -1,14 +1,167 @@
 body {
   margin: 0;
-  padding: 16px;
   font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: #fff;
   color: #20201d;
+}
+
+button,
+label,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #cfcac1;
+  background: #f7f5f1;
+  color: #20201d;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+main {
+  padding: 16px;
+}
+
+header {
+  align-items: center;
+  border-bottom: 1px solid #e1ddd5;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px;
+}
+
+h1,
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.controls {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.tree {
+  overflow: auto;
+}
+
+.editor {
+  border: 1px solid #e1ddd5;
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  max-width: 720px;
+  padding: 10px 12px;
+}
+
+.editor-head {
+  align-items: end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.editor-actions {
+  display: flex;
+}
+
+.mode {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.label {
+  color: #5e594f;
+  font-size: 13px;
+}
+
+textarea {
+  border: 1px solid #d8d2c7;
+  min-height: 72px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.key-field {
+  display: grid;
+  gap: 4px;
+}
+
+.key-field[hidden] {
+  display: none;
+}
+
+input {
+  border: 1px solid #d8d2c7;
+  padding: 4px 6px;
 }
 
 pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  overflow: auto;
+}
+
+button:disabled {
+  color: #9b958b;
+  cursor: default;
+}
+
+.note {
+  border: 1px solid #e1ddd5;
+  color: #5e594f;
+  margin-top: 24px;
+  max-width: 520px;
+  padding: 10px 12px;
+}
+
+.note div {
+  color: #20201d;
+  font-weight: 600;
+}
+
+.note p {
+  margin: 4px 0 0;
+}
+
+.children {
+  border-left: 1px solid #e1ddd5;
+  margin-left: 10px;
+  padding-left: 12px;
+}
+
+.pair {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+
+.row {
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: #20201d;
+  padding: 1px 3px;
+  text-align: left;
+}
+
+.pair > .row:first-child {
+  color: #6f4c1c;
+}
+
+.selected {
+  background: #fff0b8;
+}
+
+summary {
+  cursor: pointer;
+}
+
+summary .row {
+  display: inline;
 }

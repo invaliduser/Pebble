@@ -91,7 +91,7 @@
   (slurp (:body req)))
 
 (defn whoami []
-  (let [repo-location (.getCanonicalPath (io/file "."))]
+  (let [repo (.getCanonicalPath (io/file "."))]
     {:name "pebble"
      :kind :local-shared-state
      :description "A local shared state object for Daniel and Codex"

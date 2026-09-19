@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pebble Control Flow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20201d;
+      --muted: #64645c;
+      --line: #dedbd3;
+      --paper: #fbfaf7;
+      --code: #f0eee8;
+      --accent: #496a62;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 16px/1.55 system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 44px 24px 64px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 36px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 10px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    p {
+      max-width: 760px;
+      margin: 0 0 14px;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      background: white;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--accent);
+      font-weight: 650;
+    }
+
+    .intro {
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .diagram {
+      margin: 18px 0 28px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: white;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Pebble Control Flow</h1>
+    <p class="intro">
+      Pebble is one atom plus two adapters. HTTP shows the atom in a browser;
+      the socket accepts EDN commands that can read or change it.
+    </p>
+
+    <h2>The Whole Shape</h2>
+    <p>
+      <code>-main</code> reads ports, starts both servers, prints their addresses,
+      and then waits forever. Both servers point at the same <code>!state</code>.
+    </p>
+
+    <div class="diagram">
+      <pre class="mermaid">
+flowchart TD
+  Main["-main"]
+  Env["env-int reads port env vars"]
+  HttpStart["start-http!"]
+  SockStart["start-socket!"]
+  App["app"]
+  SocketLoop["accept loop"]
+  Client["serve-client"]
+  Command["handle-line -> apply-command"]
+  State["!state atom"]
+  Browser["browser GET / or /state"]
+  Netcat["socket client sends EDN lines"]
+
+  Main --> Env
+  Main --> HttpStart
+  Main --> SockStart
+  HttpStart --> App
+  SockStart --> SocketLoop
+  SocketLoop --> Client
+  Browser --> App
+  App --> State
+  Netcat --> Client
+  Client --> Command
+  Command --> State
+      </pre>
+    </div>
+
+    <h2>Socket Path</h2>
+    <p>
+      The socket path is line-oriented. Each line is read as EDN, interpreted as
+      a command map, printed back as EDN, and followed by a newline.
+    </p>
+
+    <div class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant C as Socket client
+  participant S as serve-client
+  participant H as handle-line
+  participant A as apply-command
+  participant M as !state
+
+  C->>S: "{:op :assoc :path [:plan 0] :value \"hello\"}\\n"
+  S->>H: line string
+  H->>A: EDN command map
+  A->>M: swap! assoc-in
+  M-->>A: updated map
+  A-->>H: "hello"
+  H-->>S: "hello"
+  S-->>C: "\"hello\"\\n"
+      </pre>
+    </div>
+
+    <h2>HTTP Path</h2>
+    <p>
+      HTTP is currently just a display adapter. The page fetches <code>/state</code>,
+      and <code>/state</code> prints the current atom value with <code>pr-str</code>.
+    </p>
+
+    <div class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant B as Browser
+  participant App as app
+  participant Page as page.html
+  participant M as !state
+
+  B->>App: GET /
+  App->>Page: slurp public/page.html
+  Page-->>B: HTML + fetch script
+  B->>App: GET /state
+  App->>M: deref
+  M-->>App: current map
+  App-->>B: EDN string
+      </pre>
+    </div>
+
+    <h2>Function Roles</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Function</th>
+          <th>Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>apply-command</code></td>
+          <td>The little language: <code>:ping</code>, <code>:state</code>, <code>:get</code>, <code>:assoc</code>, <code>:reset</code>, <code>:bye</code>.</td>
+        </tr>
+        <tr>
+          <td><code>handle-line</code></td>
+          <td>Turns one socket line into EDN, calls <code>apply-command</code>, and returns either the value or an error string.</td>
+        </tr>
+        <tr>
+          <td><code>serve-client</code></td>
+          <td>Loops over lines from one client, writes one EDN result per line, and stops when the result is <code>:bye</code>.</td>
+        </tr>
+        <tr>
+          <td><code>start-socket!</code></td>
+          <td>Creates the server socket and starts the accept loop.</td>
+        </tr>
+        <tr>
+          <td><code>app</code></td>
+          <td>Routes HTTP requests for <code>/</code>, <code>/state</code>, and unknown paths.</td>
+        </tr>
+        <tr>
+          <td><code>-main</code></td>
+          <td>Chooses ports, starts HTTP and socket servers, prints addresses, and keeps the process alive.</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "strict",
+      theme: "default",
+      flowchart: { htmlLabels: true }
+    });
+  </script>
+</body>
+</html>

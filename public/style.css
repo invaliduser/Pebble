@@ -1,0 +1,14 @@
+body {
+  margin: 0;
+  padding: 16px;
+  font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #fff;
+  color: #20201d;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}

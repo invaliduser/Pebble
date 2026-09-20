@@ -22,6 +22,21 @@ PEBBLE_SOCKET_PORT=7781 ./agent '{:op :reset :value {}}'
 Pebble commands are EDN maps. Prefer `pr-str`/EDN-shaped data over ad hoc
 string formatting.
 
+Use `:eval` to run arbitrary Clojure source text. Put the code in the `:code`
+string; Pebble reads and evaluates the string in the `pebble` namespace and
+returns the last form's value:
+
+```bash
+PEBBLE_SOCKET_PORT=7781 ./agent '{:op :eval :code "(+ 1 2)"}'
+```
+
+Use `{:op :command ...}` as a dry echo path when you want to see the parsed
+command map without changing state:
+
+```bash
+PEBBLE_SOCKET_PORT=7781 ./agent '{:op :command :note "hello"}'
+```
+
 ## Plans
 
 When Daniel says to put a plan into Pebble, use an ordered vector of pairs:

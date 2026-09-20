@@ -5,9 +5,19 @@
             [org.httpkit.server :as http]
             [toothpick :refer [ensurer
                                defn-with-closed]])
-    (:import [java.net ServerSocket]))
+    (:import [java.io PushbackReader StringReader]
+             [java.net ServerSocket]))
 
-(defonce !state (atom {:hello "pebble"}))
+(def state-file ".pebble-state.edn")
+(def default-state {:hello "pebble"})
+
+(defn load-state []
+  (let [f (io/file state-file)]
+    (if (.exists f)
+      (edn/read-string (slurp f))
+      default-state)))
+
+(defonce !state (atom (load-state)))
 (defonce !changed-at (atom (System/currentTimeMillis)))
 (defonce !stop-http (atom nil))
 (defonce !socket (atom nil))
@@ -15,7 +25,11 @@
 (defn now []
   (System/currentTimeMillis))
 
+(defn save! []
+  (spit state-file (pr-str @!state)))
+
 (defn changed! []
+  (save!)
   (reset! !changed-at (now)))
 
 (defn update-at [m path f & args]
@@ -28,7 +42,17 @@
       (assoc new-key (get m old-key))
       (dissoc old-key)))
 
-(defn-with-closed apply-command [{:keys [op path value old-key new-key] :as command}]
+(defn eval-code [code]
+  (binding [*ns* (the-ns 'pebble)]
+    (let [eof (Object.)
+          rdr (PushbackReader. (StringReader. code))]
+      (loop [result nil]
+        (let [form (read rdr false eof)]
+          (if (identical? eof form)
+            result
+            (recur (eval form))))))))
+
+(defn-with-closed apply-command [{:keys [op path value old-key new-key code] :as command}]
   [pathv (ensurer vector)]
   (case op
     :ping :pong
@@ -46,6 +70,9 @@
                       state (swap! !state update-at path rename-key old-key new-key)]
                   (changed!)
                   (get-in state (conj path new-key)))
+    :eval (let [result (eval-code code)]
+            (save!)
+            result)
     :command command
     (str "unknown op: " op)))
 

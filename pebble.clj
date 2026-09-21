@@ -9,6 +9,7 @@
              [java.net ServerSocket]))
 
 (def state-file ".pebble-state.edn")
+(def log-file ".pebble-log.edn")
 (def default-state {:hello "pebble"})
 
 (defn load-state []
@@ -32,10 +33,99 @@
   (save!)
   (reset! !changed-at (now)))
 
+(defn mutates? [{:keys [op]}]
+  (contains? #{:assoc :reset :rename-key :dissoc :eval :undo :redo} op))
+
+(defn log! [command before result]
+  (spit log-file
+        (str (pr-str (cond-> {:at (now) :command command :result result}
+                       before (assoc :before before)))
+             "\n")
+        :append true))
+
+(defn log-events []
+  (let [f (io/file log-file)]
+    (if (.exists f)
+      (mapv edn/read-string (line-seq (io/reader f)))
+      [])))
+
 (defn update-at [m path f & args]
   (if (seq path)
     (apply update-in m path f args)
     (apply f m args)))
+
+(defn before [{:keys [op path key old-key new-key]}]
+  (case op
+    :assoc (let [parent-path (pop path)
+                 k (peek path)
+                 parent (get-in @!state parent-path)]
+             {:op op :path path :existed? (contains? parent k) :old (get parent k)})
+    :reset {:op op :state @!state}
+    :rename-key {:op op :path path :parent (get-in @!state path)}
+    :dissoc (let [parent (get-in @!state path)]
+              {:op op :path path :key key :existed? (contains? parent key) :old (get parent key)})
+    :eval nil
+    nil))
+
+(defn restore! [{:keys [op path key existed? old state parent]}]
+  (case op
+    :assoc (let [parent-path (pop path)
+                 k (peek path)]
+             (if existed?
+               (swap! !state assoc-in path old)
+               (swap! !state update-at parent-path dissoc k)))
+    :reset (reset! !state state)
+    :rename-key (swap! !state update-at path (constantly parent))
+    :dissoc (when existed?
+              (swap! !state assoc-in (conj path key) old))
+    :eval (reset! !state state)))
+
+(declare apply-command)
+
+(defn latest-undoable []
+  (let [events (log-events)
+        undone (reduce (fn [xs {:keys [command result]}]
+                         (case (:op command)
+                           :undo (if-let [i (:undid-index result)] (conj xs i) xs)
+                           :redo (if-let [i (:redid-index result)] (disj xs i) xs)
+                           xs))
+                       #{}
+                       events)]
+    (first
+     (for [[i event] (rseq (vec (map-indexed vector events)))
+           :when (and (:before event)
+                      (not (undone i))
+                      (not= :undo (get-in event [:command :op])))]
+       [i event]))))
+
+(defn edit? [{:keys [command before]}]
+  (and before
+       (not (contains? #{:undo :redo} (:op command)))))
+
+(defn latest-redoable []
+  (let [events (log-events)
+        last-edit (last (keep-indexed #(when (edit? %2) %1) events))
+        suffix (subvec events (inc (or last-edit -1)))
+        redone (set (keep-indexed
+                     (fn [_ {:keys [command result]}]
+                       (when (= :redo (:op command))
+                         (:redid-undo-index result)))
+                     suffix))]
+    (first
+     (for [[offset {:keys [command result] :as event}] (rseq (vec (map-indexed vector suffix)))
+           :let [i (+ (inc (or last-edit -1)) offset)]
+           :when (and (= :undo (:op command))
+                      (:undid-index result)
+                      (not (redone i)))]
+       [i event]))))
+
+(defn redo! [[undo-index {{target-index :undid-index} :result}]]
+  (let [event (nth (log-events) target-index)
+        result (apply-command (:command event))]
+    {:redid-undo-index undo-index
+     :redid-index target-index
+     :redid (:command event)
+     :result result}))
 
 (defn rename-key [m old-key new-key]
   (-> m
@@ -52,7 +142,7 @@
             result
             (recur (eval form))))))))
 
-(defn-with-closed apply-command [{:keys [op path value old-key new-key code] :as command}]
+(defn-with-closed apply-command [{:keys [op path value old-key new-key key code] :as command}]
   [pathv (ensurer vector)]
   (case op
     :ping :pong
@@ -70,6 +160,19 @@
                       state (swap! !state update-at path rename-key old-key new-key)]
                   (changed!)
                   (get-in state (conj path new-key)))
+    :dissoc (let [path (pathv path)
+                  state (swap! !state update-at path dissoc key)]
+              (changed!)
+              (get-in state path))
+    :undo (if-let [[i event] (latest-undoable)]
+            (do
+              (restore! (:before event))
+              (changed!)
+              {:undid-index i :undid (:command event)})
+            {:undid nil})
+    :redo (if-let [undo-event (latest-redoable)]
+            (redo! undo-event)
+            {:redid nil})
     :eval (let [result (eval-code code)]
             (save!)
             result)
@@ -78,7 +181,16 @@
 
 (defn handle-line [line]
   (try
-    (apply-command (edn/read-string line))
+    (let [command (edn/read-string line)
+          before (before command)
+          result (apply-command command)]
+      (when (and (mutates? command)
+                 (case (:op command)
+                   :undo (:undid-index result)
+                   :redo (:redid-index result)
+                   true))
+        (log! command before result))
+      result)
     (catch Throwable e
       (.getMessage e))))
 
@@ -131,15 +243,14 @@
                                 :env-port "PEBBLE_SOCKET_PORT"
                                 :default-port 7778}}}))
 
-(defn-with-closed app [req]
-  [get-asset #(slurp (io/file "public" %))
-   page (get-asset "page.html")
-   css  (get-asset "style.css")
-   js   (get-asset "js/script.js")]
+(defn get-asset [path]
+  (slurp (io/file "public" path)))
+
+(defn app [req]
   (case (:uri req)
-    "/" (response 200 page "text/html; charset=utf-8")
-    "/style.css" (response 200 css "text/css; charset=utf-8")
-    "/js/script.js" (response 200 js "text/javascript; charset=utf-8")
+    "/" (response 200 (get-asset "page.html") "text/html; charset=utf-8")
+    "/style.css" (response 200 (get-asset "style.css") "text/css; charset=utf-8")
+    "/js/script.js" (response 200 (get-asset "js/script.js") "text/javascript; charset=utf-8")
     "/command" (response 200 (pr-str (handle-line (body-string req))) "application/edn; charset=utf-8")
     "/whoami" (response 200 (pr-str (whoami)) "application/edn; charset=utf-8")
     "/state" (response 200

@@ -257,6 +257,24 @@ function editSelectedKey() {
   focusEditorWith(fullEdn(selectedKey()), "edn");
 }
 
+async function dissocSelectedKey() {
+  if (!selection.path.length) return;
+  const path = selectedParentPath();
+  const command = `{:op :dissoc :path ${fullEdn(path)} :key ${fullEdn(selectedKey())}}`;
+  await sendCommand(command, false);
+  selection = at(path);
+  latestChangedAt = 0;
+  await poll();
+}
+
+async function undo() {
+  await sendCommand("{:op :undo}");
+}
+
+async function redo() {
+  await sendCommand("{:op :redo}");
+}
+
 function move(delta) {
   const xs = visibleSelections();
   if (!xs.length) return;
@@ -330,6 +348,21 @@ function navigate(e) {
     select(at([]), true);
     return;
   }
+  if (e.key === "d") {
+    e.preventDefault();
+    dissocSelectedKey().catch(e => editResult.textContent = String(e));
+    return;
+  }
+  if (e.key === "u") {
+    e.preventDefault();
+    undo().catch(e => editResult.textContent = String(e));
+    return;
+  }
+  if (e.key === "y") {
+    e.preventDefault();
+    redo().catch(e => editResult.textContent = String(e));
+    return;
+  }
   if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
   e.preventDefault();
   ({
@@ -369,7 +402,6 @@ async function poll() {
     latestParsedState = parseEdn(text);
     tree.replaceChildren(node(latestParsedState));
     select(selection);
-    console.log("pebble", {changedAt, state: text});
   }
 }
 
@@ -432,6 +464,7 @@ function syncAutoRefresh() {
 
 autoRefresh.onchange = syncAutoRefresh;
 
+autoRefresh.checked = true;
 syncAutoRefresh();
 syncAssocKey();
 poll().catch(console.error);

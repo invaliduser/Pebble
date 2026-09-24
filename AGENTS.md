@@ -65,5 +65,5 @@ The dev server is usually run with:
 PEBBLE_HTTP_PORT=7780 PEBBLE_SOCKET_PORT=7781 bb run
 ```
 
-The browser UI is at `http://localhost:7780`. The HTTP page is for Daniel; the
+The browser UI is at `http://localhost:7780`. The HTTP page is for the user; the
 socket/`./agent` path is the agent-facing interface.

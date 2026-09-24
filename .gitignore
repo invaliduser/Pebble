@@ -2,3 +2,4 @@
 \#*\#
 .nrepl-port
 .pebble-state.edn
+.pebble-log.edn
